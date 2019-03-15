@@ -25,6 +25,7 @@ function sendCell(event) {
 
 
 function startNewGame(event) {
+    document.querySelector('#field').addEventListener('click', sendCell);
     sock.emit('newGame');
 }
 
@@ -38,6 +39,7 @@ class GameField {
             this.refresh(state.cells);
         });
         sock.on('winner', (winner) => {
+            this.field.removeEventListener('click', sendCell);
             this.showResult(winner);
         });
         sock.on('hideResult', () => {
