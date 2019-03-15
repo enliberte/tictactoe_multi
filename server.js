@@ -41,7 +41,7 @@ class Game {
 
         //ничья
         if (Object.values(this.field).every((cellState) => {return !!cellState})) {
-            this.winner = 'Ничья';
+            io.emit('winner', 'Ничья');
             return;
         }
 
@@ -52,7 +52,7 @@ class Game {
             sumInRL = this.calcSum(this.field[`r${+cell.row + offset}c${+cell.cln + offset}`], sumInRL); //диагональ справа-налево
             sumInLR = this.calcSum(this.field[`r${+cell.row - offset}c${+cell.cln + offset}`], sumInLR); //диагональ слева-направо
             if (sumInRow === this.toWin || sumInCln === this.toWin || sumInRL === this.toWin || sumInLR === this.toWin) {
-                this.winner = this.getFigure();
+                io.emit('winner', `Выиграли: ${this.getFigure()}`);
                 return;
             }
         }
@@ -60,7 +60,6 @@ class Game {
 
     initField(){
         this.currentFigure = true;
-        this.winner = null;
         this.field = this.createFieldObj();
     }
 
@@ -91,29 +90,18 @@ app.use(express.static(`${__dirname}/client`));
 
 
 io.on('connection', (sock) => {
-    sock.emit('gameState',
-        {
-            cells: game.field,
-            winner: game.winner
-        });
+    sock.emit('gameState', {cells: game.field});
     sock.on('pressedCell', (cell) => {
         if (game.setState(cell)) {
             game.checkWinner(cell);
             game.currentFigure = !game.currentFigure;
         }
-        io.emit('gameState',
-            {
-                cells: game.field,
-                winner: game.winner
-            });
+        io.emit('gameState', {cells: game.field});
     });
     sock.on('newGame', () => {
+        io.emit('hideResult');
         game.initField();
-        io.emit('gameState',
-            {
-                cells: game.field,
-                winner: game.winner
-            });
+        io.emit('gameState', {cells: game.field});
     });
 });
 

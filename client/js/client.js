@@ -25,10 +25,6 @@ function sendCell(event) {
 
 
 function startNewGame(event) {
-    let gameResult = document.querySelector('#result');
-    if (gameResult) {
-        document.body.removeChild(gameResult);    
-    }
     sock.emit('newGame');
 }
 
@@ -40,23 +36,25 @@ class GameField {
         sock.on('gameState', (state) => {
             console.log(state);
             this.refresh(state.cells);
-            this.showResult(state.winner);
         });
+        sock.on('winner', (winner) => {
+            this.showResult(winner);
+        });
+        sock.on('hideResult', () => {
+            let gameResult = document.querySelector('#result');
+            if (gameResult) {
+                document.body.removeChild(gameResult);
+            }
+        })
     }
 
     showResult(result) {
-        if (result) {
-            let gameResult = document.createElement('div');
-            gameResult.id = 'result';
-            if (result === 'Ничья') {
-                gameResult.textContent = result;
-            } else {
-                gameResult.textContent = `Выиграли: ${result}`
-            }
-            gameResult.style.left = `${this.field.clientHeight / 2 - gameResult.clientWidth / 2}px`;
-            gameResult.style.top = `-${this.field.clientHeight / 2 + gameResult.clientHeight / 2}px`;
-            document.body.appendChild(gameResult);
-        }
+        let gameResult = document.createElement('div');
+        gameResult.textContent = result;
+        gameResult.id = 'result';
+        gameResult.style.left = `${this.field.clientHeight / 2 - gameResult.clientWidth / 2}px`;
+        gameResult.style.top = `-${this.field.clientHeight / 2 + gameResult.clientHeight / 2}px`;
+        document.body.appendChild(gameResult);
     }
 
     refresh(cells) {
