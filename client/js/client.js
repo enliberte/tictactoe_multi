@@ -26,7 +26,9 @@ function sendCell(event) {
 
 function startNewGame(event) {
     let gameResult = document.querySelector('#result');
-    document.body.removeChild(gameResult);
+    if (gameResult) {
+        document.body.removeChild(gameResult);    
+    }
     sock.emit('newGame');
 }
 
