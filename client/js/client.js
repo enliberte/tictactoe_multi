@@ -93,5 +93,5 @@ class GameField {
     }
 }
 
-new GameField(20).draw();
+new GameField(15).draw();
 document.querySelector('#refresh').addEventListener('click', startNewGame);

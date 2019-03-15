@@ -77,7 +77,7 @@ class Game {
 
 }
 
-let game = new Game(20);
+let game = new Game(15);
 game.initField();
 
 const port = process.env.PORT || 8000;
