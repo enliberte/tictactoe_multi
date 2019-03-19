@@ -102,6 +102,7 @@ class Room {
     }
 
     sendInitGameField(clientSocket) {
+        clientSocket.emit('drawGamefield', {cells: this.gamefield.field});
         clientSocket.emit('gameState', {cells: this.gamefield.field});
         if (this.gamefield.winner) {
             clientSocket.emit('winner', this.gamefield.winner)
@@ -163,10 +164,14 @@ class Game {
             clientSocket.on('joinRoom', (id) => this.rooms[id].join(clientSocket));
             clientSocket.on('exitRoom', (id) => {
                 this.rooms[id].exit(clientSocket);
-                clientSocket.emit('displayMenu');
+                clientSocket.emit('roomList', Object.keys(this.rooms));
                 if (this.rooms[id].clientSockets.length === 0) {
                     this.removeRoom(id);
                 }
+            });
+            clientSocket.on('backToMenu', () => {
+                clientSocket.emit('hideRoomList', Object.keys(this.rooms));
+                clientSocket.emit('displayMenu', Object.keys(this.rooms));
             });
         })
     }
