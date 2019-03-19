@@ -97,7 +97,7 @@ io.on('connection', (sock) => {
     if (game.winner) {
         sock.emit('winner', game.winner)
     }
-    
+
     sock.on('pressedCell', (cell) => {
         if (game.setState(cell)) {
             game.checkWinner(cell);
