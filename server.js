@@ -3,7 +3,7 @@ const express = require('express');
 const socketio = require('socket.io');
 
 
-class Game {
+class Gamefield {
     constructor(size) {
         this.size = size;
         this.toWin = 5;
@@ -42,8 +42,7 @@ class Game {
         //ничья
         if (Object.values(this.field).every((cellState) => {return !!cellState})) {
             this.winner = 'Ничья';
-            io.emit('winner', this.winner);
-            return;
+            return true;
         }
 
         //выигрыш
@@ -54,10 +53,11 @@ class Game {
             sumInLR = this.calcSum(this.field[`r${+cell.row - offset}c${+cell.cln + offset}`], sumInLR); //диагональ слева-направо
             if (sumInRow === this.toWin || sumInCln === this.toWin || sumInRL === this.toWin || sumInLR === this.toWin) {
                 this.winner = `Выиграли: ${this.getFigure()}`;
-                io.emit('winner', this.winner);
-                return;
+                return true;
             }
         }
+
+        return false;
     }
 
     initField(){
@@ -75,47 +75,142 @@ class Game {
         }
         return fieldObj;
     }
-
-
 }
 
-let game = new Game(20);
-game.initField();
 
-const port = process.env.PORT || 8000;
-const app = express();
-const server = http.createServer(app);
-const io = socketio(server);
+class Room {
+    constructor(id, clientSocket) {
+        this.id = id;
+        this.clientSockets = [];
+        this.clientSockets.push(clientSocket);
+        this.gamefield = new Gamefield(20);
+        this.gamefield.initField();
 
-
-//отдача статики
-app.use(express.static(`${__dirname}/client`));
-
-
-io.on('connection', (sock) => {
-    sock.emit('gameState', {cells: game.field});
-    if (game.winner) {
-        sock.emit('winner', game.winner)
+        //обработка событий
+        this.sendInitGameField(clientSocket);
+        this.subscribeOnGameStateChange(clientSocket);
     }
 
-    sock.on('pressedCell', (cell) => {
-        if (game.setState(cell)) {
-            game.checkWinner(cell);
-            game.currentFigure = !game.currentFigure;
+    join(clientSocket) {
+        this.clientSockets.push(clientSocket);
+        this.sendInitGameField(clientSocket);
+        this.subscribeOnGameStateChange(clientSocket);
+    }
+
+    exit(clientSocket) {
+        this.clientSockets = this.clientSockets.filter((oneClientSocket) => {return oneClientSocket !== clientSocket});
+    }
+
+    sendInitGameField(clientSocket) {
+        clientSocket.emit('drawGamefield', this.gamefield.size);
+        clientSocket.emit('gameState', {cells: this.gamefield.field});
+        if (this.gamefield.winner) {
+            clientSocket.emit('winner', this.gamefield.winner)
         }
-        io.emit('gameState', {cells: game.field});
-    });
+    }
 
-    sock.on('newGame', () => {
-        io.emit('hideResult');
-        game.initField();
-        io.emit('gameState', {cells: game.field});
-    });
-});
+    emitToAll(event, args) {
+        for (let oneClientSocket of this.clientSockets) {
+            oneClientSocket.emit(event, args);
+        }
+    }
+
+    subscribeOnGameStateChange(clientSocket) {
+        clientSocket.on('pressedCell', (cell) => {
+            if (this.gamefield.setState(cell)) {
+                if (this.gamefield.checkWinner(cell)) {
+                    this.emitToAll('winner', this.gamefield.winner);
+                }
+                this.gamefield.currentFigure = !this.gamefield.currentFigure;
+            }
+            this.emitToAll('gameState', {cells: this.gamefield.field});
+        });
+
+        clientSocket.on('newGame', () => {
+            this.gamefield.initField();
+            this.emitToAll('hideResult');
+            this.emitToAll('gameState', {cells: this.gamefield.field});
+        });
+    }
+}
+
+
+class Game {
+    constructor() {
+        this.port = process.env.PORT || 8000;
+        this.app = express();
+        this.server = http.createServer(this.app);
+        this.serverSocket = socketio(this.server);
+        this.rooms = {};
+
+        //отдача статики
+        this.app.use(express.static(`${__dirname}/client`));
+
+        //биндим на порт
+        this.server.on('error', (err) => {console.log(`Server error: ${err}`)});
+        this.server.listen(this.port, () => {console.log(`App is running on port ${this.port}`);});
+
+        //обработка событий
+        this.serverSocket.on('connection', (clientSocket) => {
+            clientSocket.emit('displayMenu');
+            clientSocket.on('createRoom', () => {
+                clientSocket.emit('hideMenu');
+                this.createRoom(clientSocket);
+            });
+            clientSocket.on('selectRoom', () => {
+                clientSocket.emit('hideMenu');
+                clientSocket.emit('roomList', this.getFreeRooms());
+            });
+            clientSocket.on('joinRoom', (id) => {this.rooms[id].join(clientSocket);});
+            clientSocket.on('exitRooms', () => {
+                clientSocket.emit('hideRoomList');
+                clientSocket.emit('displayMenu');
+            });
+            clientSocket.on('exitRooms', () => {
+                clientSocket.emit('hideRoomList');
+                clientSocket.emit('displayMenu');
+            });
+            clientSocket.on('exitGamefield', () => {
+                clientSocket.emit('hideGamefield');
+                clientSocket.emit('displayMenu');
+                for (let id in this.rooms) {
+                    if (this.rooms[id].clientSockets.indexOf(clientSocket) !== -1) {
+                        this.rooms[id].exit(clientSocket);
+                        if (this.rooms[id].clientSockets.length === 0) {
+                            this.removeRoom(id);
+                        }
+                        break;
+                    }
+                }
+            });
+        })
+    }
+
+    createRoom(clientSocket) {
+        let id = Math.random(); //переписать под uuid v4
+        this.rooms[id] = new Room(id, clientSocket);
+    }
+
+    removeRoom(id) {
+        delete this.rooms[id];
+    }
+
+    getFreeRooms() {
+        let freeRooms = [];
+        for (let room in this.rooms) {
+            if (this.rooms[room].clientSockets.length < 2) {
+                freeRooms.push(room);
+            }
+        }
+        return freeRooms;
+    }
+}
+
+
+new Game();
 
 
 
-server.on('error', (err) => {console.log(`Server error: ${err}`)});
-server.listen(port, () => {console.log(`App is running on port ${port}`);});
+
 
 
