@@ -171,6 +171,7 @@ class Game {
                 clientSocket.emit('displayMenu');
             });
             clientSocket.on('exitGamefield', () => {
+                clientSocket.emit('hideResult');
                 clientSocket.emit('hideGamefield');
                 clientSocket.emit('displayMenu');
                 for (let id in this.rooms) {
